@@ -4,19 +4,31 @@ from pprint import pprint
 
 
 class VkDownloader:
+    """API VK"""
     def __init__(self, token: str, version: str):
         self.token = token
         self.version = version
 
-    def get_photos(self, vk_id_number):
+    def get_photos(self, vk_id_number, count_number="5"):
+        """Метод получает информацию о фото в профиле в поле "profile",
+        vk_id_number - id пользователя в сети,
+        count_number - максимальное количество фото(но не более 10)."""
+
+        if int(count_number) < 0:
+            print("Количество фото должно быть положительным")
+        elif int(count_number) > 10:
+            count_number = "10"
+            print("Максимальное количество фото - 10 шт.")
+
         url = "https://api.vk.com/method/photos.get"
         params = {
             "owner_id": vk_id_number, "access_token": self.token, "v": self.version,
             "album_id": "profile", "rev": "0", "extended": "0",
-            "photo_sizes": "0", "count": "5"
+            "photo_sizes": "0", "count": count_number,
+            "extended": "1"
         }
         response = requests.get(url, params=params)
-        pprint(response.json())
+        # pprint(response.json())
         return response.json()
 
     def get_user_data(self, vk_id_number):
@@ -26,7 +38,9 @@ class VkDownloader:
         # pprint(response.json())
         return response.json()
 
+
 class YaUploader:
+    """API Ya.Disk"""
     def __init__(self, token: str):
         self.token = token
 
@@ -93,6 +107,14 @@ def read_tokens(token_file_var) -> dict:
     return tokens_dict
 
 
+def download_photo(folder_name, file_name, url):
+    get_response = requests.get(url, stream=True)
+    with open(file_name, 'wb') as f:
+        for chunk in get_response.iter_content(chunk_size=1024):
+            if chunk:  # filter out keep-alive new chunks
+                f.write(chunk)
+
+
 if __name__ == '__main__':
     # Получить путь к загружаемому файлу и токенам от пользователя
     path_to_file = r'C:\Users\ILYA\Desktop\PYTHON\_final_API\file.txt'
@@ -101,19 +123,30 @@ if __name__ == '__main__':
     path_disk = "NETOLOGY"
     vk_id = "551682139"
     vk_version = "5.131"
+    vk_qty_photo = "5"
 
     tokens = read_tokens(path_to_token_file)
-
     token_vk = tokens["vk"]
 
-    # url = 'https://api.vk.com/method/users.get'
-    # params = {'user_ids': '1', 'access_token': token_vk, 'v': '5.131'}
-    # response = requests.get(url, params=params)
-    # pprint(response.json())
-
+    # Написать в метод
+    # Загрузить ссылки на фото с максимальным разрешением указанного профиля по API VK (по умолчанию 5)
+    print(f'Загружается не более {vk_qty_photo} фото профиля.')
     user_data_downloader = VkDownloader(token_vk, vk_version)
-    vk_data = user_data_downloader.get_photos(vk_id)
-    # vk_result = user_data_downloader.get_user_data(vk_id)
+    vk_data = user_data_downloader.get_photos(vk_id, vk_qty_photo)
+    photo_items = vk_data['response']['count']
+    print(f'Найдено {photo_items} фото профиля.')
+    dict_of_photo_links = {}
+    for data in vk_data['response']['items']:
+        photo_profile = [data['sizes'][-1]['url'], data['likes']['count'], data['date']]
+        if str(data['likes']['count']) not in dict_of_photo_links.keys():
+            dict_of_photo_links.setdefault(str(data['likes']['count']), data['sizes'][-1]['url'])
+        elif (str(data['likes']['count']) + str(data['date'])) not in dict_of_photo_links.keys():
+            dict_of_photo_links.setdefault(str(data['likes']['count']) + str(data['date']), data['sizes'][-1]['url'])
+    # pprint(dict_of_photo_links)
+
+    for name,link in dict_of_photo_links.items():
+        download_photo(path_disk, name, link)
+        print(f'Загружен файл {name}.')
 
     # token_ya_disk = tokens["ya_disk"]
     # uploader = YaUploader(token_ya_disk)
