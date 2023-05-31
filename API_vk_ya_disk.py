@@ -94,6 +94,14 @@ class YaUploader:
         self._get_folders_name(disk_path)
         self.upload_file_to_disk(file_path, path_disk)
 
+    def get_user_info(self):
+        data_url = "https://cloud-api.yandex.net/v1/disk"
+        headers = self.get_headers()
+        response = requests.get(data_url, headers=headers)
+        response.raise_for_status()
+        # pprint(response.json())
+        return response.json()
+
 
 def read_tokens(token_file_var) -> dict:
     """Загрузка TOKEN для API VK и Ya.Disk из файла token_file_var, где:
@@ -190,3 +198,7 @@ if __name__ == '__main__':
         uploader.upload(file_to_upload, path_disk)
     # pprint(dict_of_photo_links)
     make_json(dict_of_photo_links, json_name)
+
+    user_info = uploader.get_user_info()
+    user_name = user_info['user']['login']
+    print(f'Логин пользователя диска: {user_name}.')
