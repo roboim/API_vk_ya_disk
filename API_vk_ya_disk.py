@@ -38,6 +38,24 @@ class VkDownloader:
         # pprint(response.json())
         return response.json()
 
+    def get_photo_dict(self, vk_id_d, vk_qty_photo_d, path_disk_d) -> dict:
+        # Загрузить ссылки на фото с максимальным разрешением указанного профиля по API VK (по умолчанию 5)
+        print(f'Загружается не более {vk_qty_photo_d} фото профиля в папку {path_disk_d}.')
+        vk_data = user_data_downloader.get_photos(vk_id_d, vk_qty_photo_d)
+        photo_items = vk_data['response']['count']
+        print(f'Найдено {photo_items} фото профиля.')
+        # pprint(vk_data)
+        dict_of_photo_links_d = {}
+        for data in vk_data['response']['items']:
+            if (str(data['likes']['count']) + ".jpg") not in dict_of_photo_links_d.keys():
+                dict_of_photo_links_d.setdefault(str(data['likes']['count']) + ".jpg",
+                                               [data['sizes'][-1]['url'], data['sizes'][-1]['type']])
+            elif (str(data['likes']['count']) + str(data['date'])) not in dict_of_photo_links_d.keys():
+                dict_of_photo_links_d.setdefault(str(data['likes']['count']) + "_" + str(data['date']) + ".jpg",
+                                               [data['sizes'][-1]['url'], data['sizes'][-1]['type']])
+        # pprint(dict_of_photo_links)
+        return dict_of_photo_links_d
+
 
 class YaUploader:
     """API Ya.Disk"""
@@ -173,23 +191,7 @@ if __name__ == '__main__':
     token_ya_disk = tokens["ya_disk"]
     uploader = YaUploader(token_ya_disk)
 
-    # Написать в метод
-    # Загрузить ссылки на фото с максимальным разрешением указанного профиля по API VK (по умолчанию 5)
-    print(f'Загружается не более {vk_qty_photo} фото профиля в папку {path_disk}.')
-    vk_data = user_data_downloader.get_photos(vk_id, vk_qty_photo)
-    photo_items = vk_data['response']['count']
-    print(f'Найдено {photo_items} фото профиля.')
-    # pprint(vk_data)
-    dict_of_photo_links = {}
-    for data in vk_data['response']['items']:
-        photo_profile = [data['sizes'][-1]['url'], data['likes']['count'], data['date']]
-        if (str(data['likes']['count']) + ".jpg") not in dict_of_photo_links.keys():
-            dict_of_photo_links.setdefault(str(data['likes']['count']) + ".jpg",
-                                           [data['sizes'][-1]['url'], data['sizes'][-1]['type']])
-        elif (str(data['likes']['count']) + str(data['date'])) not in dict_of_photo_links.keys():
-            dict_of_photo_links.setdefault(str(data['likes']['count']) + "_" + str(data['date']) + ".jpg",
-                                           [data['sizes'][-1]['url'], data['sizes'][-1]['type']])
-    # pprint(dict_of_photo_links)
+    dict_of_photo_links = user_data_downloader.get_photo_dict(vk_id, vk_qty_photo, path_disk)
 
     path_prj_folder = create_photo_dir(path_disk)
 
