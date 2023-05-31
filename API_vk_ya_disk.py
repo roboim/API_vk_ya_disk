@@ -14,8 +14,8 @@ class VkDownloader:
         vk_id_number - id пользователя в сети,
         count_number - максимальное количество фото(но не более 10)."""
 
-        if int(count_number) < 0:
-            print("Количество фото должно быть положительным")
+        if int(count_number) < 1:
+            print("Количество фото должно быть положительным и не меньше 1")
         elif int(count_number) > 10:
             count_number = "10"
             print("Максимальное количество фото - 10 шт.")
@@ -23,9 +23,8 @@ class VkDownloader:
         url = "https://api.vk.com/method/photos.get"
         params = {
             "owner_id": vk_id_number, "access_token": self.token, "v": self.version,
-            "album_id": "profile", "rev": "0", "extended": "0",
+            "album_id": "profile", "rev": "0", "extended": "1",
             "photo_sizes": "0", "count": count_number,
-            "extended": "1"
         }
         response = requests.get(url, params=params)
         # pprint(response.json())
@@ -56,7 +55,7 @@ class YaUploader:
         params = {"path": "/" + disk_file_path}
         response = requests.get(upload_url, headers=headers, params=params)
         if response.status_code == 200:
-            print(f'Папка {disk_file_path} существует на диске ')
+            # print(f'Папка {disk_file_path} существует на диске ')
             return response.json()
         else:
             return self._make_dir(disk_file_path)
@@ -80,14 +79,14 @@ class YaUploader:
 
     def upload_file_to_disk(self, filename, disk_file_path):
         f = os.path.basename(filename)
-        print(f)
+        # print(f)
         disk_file_path = "/" + disk_file_path + "/" + f
-        print(disk_file_path)
+        # print(disk_file_path)
         href = self._get_upload_link(disk_file_path=disk_file_path).get("href", "")
         response = requests.put(href, data=open(filename, 'rb'))
         response.raise_for_status()
         if response.status_code == 201:
-            print("Success")
+            print("Загружен на Ya.Disk.")
 
     def upload(self, file_path, disk_path: str):
         """Метод загружает файлы по списку file_list на яндекс диск"""
@@ -96,6 +95,10 @@ class YaUploader:
 
 
 def read_tokens(token_file_var) -> dict:
+    """Загрузка TOKEN для API VK и Ya.Disk из файла token_file_var, где:
+    1-я строка - TOKEN VK,
+    2-z строка - TOKEN Ya.Disk"""
+    # По заданию данные вводятся из консоли
     with open(token_file_var, 'r', encoding='UTF-8') as token_file:
         token_vk_var = token_file.readline()
         token_ya_disk_var = token_file.readline()
@@ -107,31 +110,48 @@ def read_tokens(token_file_var) -> dict:
     return tokens_dict
 
 
-def download_photo(folder_name, file_name, url):
+def download_photo(folder_name, file_name, url) -> str:
+    path_to_result_file = os.path.join(folder_name, file_name)
     get_response = requests.get(url, stream=True)
-    with open(file_name, 'wb') as f:
+    with open(path_to_result_file, 'wb') as f:
         for chunk in get_response.iter_content(chunk_size=1024):
             if chunk:  # filter out keep-alive new chunks
                 f.write(chunk)
+    print(f'Загружен файл {file_name} в проект.')
+    return path_to_result_file
+
+
+def create_photo_dir(path_disk_prj) -> str:
+    current_path_main = os.getcwd()
+    path_to_result_folder = os.path.join(current_path_main, path_disk_prj)
+    try:
+        os.mkdir(path_to_result_folder)
+        print(f'Папка {path_disk} добавлена в проект.')
+    except FileExistsError:
+        print(f'Папка {path_disk} существует в проекте.')
+    return path_to_result_folder
 
 
 if __name__ == '__main__':
-    # Получить путь к загружаемому файлу и токенам от пользователя
-    path_to_file = r'C:\Users\ILYA\Desktop\PYTHON\_final_API\file.txt'
+    # Получить путь к токенам пользователя
     path_to_token_file = r'C:\Users\ILYA\Desktop\PYTHON\_final_API\user_data.txt'
     # Файл сохранится в папку NETOLOGY
     path_disk = "NETOLOGY"
+    # Параметры для API VK
     vk_id = "551682139"
     vk_version = "5.131"
+    # Максимальное количество фото
     vk_qty_photo = "5"
-
+    # Получить TOKENs
     tokens = read_tokens(path_to_token_file)
     token_vk = tokens["vk"]
+    user_data_downloader = VkDownloader(token_vk, vk_version)
+    token_ya_disk = tokens["ya_disk"]
+    uploader = YaUploader(token_ya_disk)
 
     # Написать в метод
     # Загрузить ссылки на фото с максимальным разрешением указанного профиля по API VK (по умолчанию 5)
-    print(f'Загружается не более {vk_qty_photo} фото профиля.')
-    user_data_downloader = VkDownloader(token_vk, vk_version)
+    print(f'Загружается не более {vk_qty_photo} фото профиля в папку {path_disk}.')
     vk_data = user_data_downloader.get_photos(vk_id, vk_qty_photo)
     photo_items = vk_data['response']['count']
     print(f'Найдено {photo_items} фото профиля.')
@@ -139,15 +159,14 @@ if __name__ == '__main__':
     for data in vk_data['response']['items']:
         photo_profile = [data['sizes'][-1]['url'], data['likes']['count'], data['date']]
         if str(data['likes']['count']) not in dict_of_photo_links.keys():
-            dict_of_photo_links.setdefault(str(data['likes']['count']), data['sizes'][-1]['url'])
+            dict_of_photo_links.setdefault(str(data['likes']['count']) + ".jpg", data['sizes'][-1]['url'])
         elif (str(data['likes']['count']) + str(data['date'])) not in dict_of_photo_links.keys():
-            dict_of_photo_links.setdefault(str(data['likes']['count']) + str(data['date']), data['sizes'][-1]['url'])
+            dict_of_photo_links.setdefault(str(data['likes']['count']) + str(data['date']) + ".jpg",
+                                           data['sizes'][-1]['url'])
     # pprint(dict_of_photo_links)
 
-    for name,link in dict_of_photo_links.items():
-        download_photo(path_disk, name, link)
-        print(f'Загружен файл {name}.')
+    path_prj_folder = create_photo_dir(path_disk)
 
-    # token_ya_disk = tokens["ya_disk"]
-    # uploader = YaUploader(token_ya_disk)
-    # result = uploader.upload(path_to_file, path_disk)
+    for name, link in dict_of_photo_links.items():
+        file_to_upload = download_photo(path_prj_folder, name, link)
+        uploader.upload(file_to_upload, path_disk)
