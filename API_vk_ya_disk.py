@@ -1,7 +1,7 @@
 import requests
 import os
 import json
-from pprint import pprint
+import sys
 
 
 class VkDownloader:
@@ -28,32 +28,33 @@ class VkDownloader:
             "photo_sizes": "0", "count": count_number,
         }
         response = requests.get(url, params=params)
-        # pprint(response.json())
         return response.json()
 
     def get_user_data(self, vk_id_number):
         url = "https://api.vk.com/method/users.get"
         params = {"user_ids": vk_id_number, "access_token": self.token, "v": self.version}
         response = requests.get(url, params=params)
-        # pprint(response.json())
         return response.json()
 
     def get_photo_dict(self, vk_id_d, vk_qty_photo_d, path_disk_d) -> dict:
         # Загрузить ссылки на фото с максимальным разрешением указанного профиля по API VK (по умолчанию 5)
         print(f'Загружается не более {vk_qty_photo_d} фото профиля в папку {path_disk_d}.')
         vk_data = user_data_downloader.get_photos(vk_id_d, vk_qty_photo_d)
-        photo_items = vk_data['response']['count']
-        print(f'Найдено {photo_items} фото профиля.')
-        # pprint(vk_data)
+        try:
+            photo_items = vk_data['response']['count']
+            print(f'Найдено {photo_items} фото профиля.')
+        except KeyError:
+            print("Ошибка ввода пользователя социальной сети.")
+            sys.exit()
+
         dict_of_photo_links_d = {}
         for data in vk_data['response']['items']:
             if (str(data['likes']['count']) + ".jpg") not in dict_of_photo_links_d.keys():
                 dict_of_photo_links_d.setdefault(str(data['likes']['count']) + ".jpg",
-                                               [data['sizes'][-1]['url'], data['sizes'][-1]['type']])
+                                                 [data['sizes'][-1]['url'], data['sizes'][-1]['type']])
             elif (str(data['likes']['count']) + str(data['date'])) not in dict_of_photo_links_d.keys():
                 dict_of_photo_links_d.setdefault(str(data['likes']['count']) + "_" + str(data['date']) + ".jpg",
-                                               [data['sizes'][-1]['url'], data['sizes'][-1]['type']])
-        # pprint(dict_of_photo_links)
+                                                 [data['sizes'][-1]['url'], data['sizes'][-1]['type']])
         return dict_of_photo_links_d
 
 
@@ -82,10 +83,8 @@ class YaUploader:
     def _make_dir(self, disk_file_path):
         upload_url = "https://cloud-api.yandex.net/v1/disk/resources"
         headers = self.get_headers()
-        # print(headers)
         params = {"path": "/" + disk_file_path, "overwrite": "true"}
         response = requests.put(upload_url, headers=headers, params=params)
-        # pprint(response.json())
         return response.json()
 
     def _get_upload_link(self, disk_file_path):
@@ -93,14 +92,11 @@ class YaUploader:
         headers = self.get_headers()
         params = {"path": disk_file_path, "overwrite": "true"}
         response = requests.get(upload_url, headers=headers, params=params)
-        # pprint(response.json())
         return response.json()
 
     def upload_file_to_disk(self, filename, disk_file_path):
         f = os.path.basename(filename)
-        # print(f)
         disk_file_path = "/" + disk_file_path + "/" + f
-        # print(disk_file_path)
         href = self._get_upload_link(disk_file_path=disk_file_path).get("href", "")
         response = requests.put(href, data=open(filename, 'rb'))
         response.raise_for_status()
@@ -117,24 +113,7 @@ class YaUploader:
         headers = self.get_headers()
         response = requests.get(data_url, headers=headers)
         response.raise_for_status()
-        # pprint(response.json())
         return response.json()
-
-
-def read_tokens(token_file_var) -> dict:
-    """Загрузка TOKEN для API VK и Ya.Disk из файла token_file_var, где:
-    1-я строка - TOKEN VK,
-    2-z строка - TOKEN Ya.Disk"""
-    # По заданию данные вводятся из консоли
-    with open(token_file_var, 'r', encoding='UTF-8') as token_file:
-        token_vk_var = token_file.readline()
-        token_ya_disk_var = token_file.readline()
-    token_vk_var = token_vk_var.rstrip()
-    token_ya_disk_var = token_ya_disk_var.rstrip()
-    tokens_dict = {}
-    tokens_dict.setdefault("vk", token_vk_var)
-    tokens_dict.setdefault("ya_disk", token_ya_disk_var)
-    return tokens_dict
 
 
 def download_photo(folder_name, file_name, file_data) -> str:
@@ -143,7 +122,7 @@ def download_photo(folder_name, file_name, file_data) -> str:
     get_response = requests.get(url, stream=True)
     with open(path_to_result_file, 'wb') as f:
         for chunk in get_response.iter_content(chunk_size=1024):
-            if chunk:  # filter out keep-alive new chunks
+            if chunk:
                 f.write(chunk)
     print(f'Загружен файл {file_name} в проект.')
     return path_to_result_file
@@ -169,36 +148,35 @@ def make_json(dict_of_photo_links_data, name_json):
         json.dump(list_json, fjson, ensure_ascii=False, indent=2)
 
     print(f'Файл {name_json} сохранён в корневом каталоге.')
-    # pprint(dict_json)
 
 
 if __name__ == '__main__':
-    # Получить путь к токенам пользователя
-    path_to_token_file = r'C:\Users\ILYA\Desktop\PYTHON\_final_API\user_data.txt'
     # Файл сохранится в папку NETOLOGY
     path_disk = "NETOLOGY"
     # Параметры для API VK
-    vk_id = "805220939"
     vk_version = "5.131"
     # Максимальное количество фото
     vk_qty_photo = "5"
     # Имя файла json на выходе программы в корневом каталоге
     json_name = "sample.json"
     # Получить TOKENs
-    tokens = read_tokens(path_to_token_file)
-    token_vk = tokens["vk"]
+    tokens_api = {}
+    tokens_api["vk"] = input("Введите токен VK:")
+    tokens_api["ya_disk"] = input("Введите токен Ya.Disk:")
+    token_vk = tokens_api["vk"]
     user_data_downloader = VkDownloader(token_vk, vk_version)
-    token_ya_disk = tokens["ya_disk"]
+    token_ya_disk = tokens_api["ya_disk"]
     uploader = YaUploader(token_ya_disk)
-
-    dict_of_photo_links = user_data_downloader.get_photo_dict(vk_id, vk_qty_photo, path_disk)
+    vk_id = input("Введите ID пользователя VK:")
 
     path_prj_folder = create_photo_dir(path_disk)
+
+    dict_of_photo_links = user_data_downloader.get_photo_dict(vk_id, vk_qty_photo, path_disk)
 
     for name, photo_data in dict_of_photo_links.items():
         file_to_upload = download_photo(path_prj_folder, name, photo_data)
         uploader.upload(file_to_upload, path_disk)
-    # pprint(dict_of_photo_links)
+
     make_json(dict_of_photo_links, json_name)
 
     user_info = uploader.get_user_info()
