@@ -1,5 +1,6 @@
 import requests
 import os
+import json
 from pprint import pprint
 
 
@@ -13,8 +14,8 @@ class VkDownloader:
         """Метод получает информацию о фото в профиле в поле "profile",
         vk_id_number - id пользователя в сети,
         count_number - максимальное количество фото(но не более 10)."""
-
         if int(count_number) < 1:
+            count_number = "0"
             print("Количество фото должно быть положительным и не меньше 1")
         elif int(count_number) > 10:
             count_number = "10"
@@ -110,7 +111,8 @@ def read_tokens(token_file_var) -> dict:
     return tokens_dict
 
 
-def download_photo(folder_name, file_name, url) -> str:
+def download_photo(folder_name, file_name, file_data) -> str:
+    url = str(file_data[0])
     path_to_result_file = os.path.join(folder_name, file_name)
     get_response = requests.get(url, stream=True)
     with open(path_to_result_file, 'wb') as f:
@@ -132,16 +134,30 @@ def create_photo_dir(path_disk_prj) -> str:
     return path_to_result_folder
 
 
+def make_json(dict_of_photo_links_data, name_json):
+    list_json = []
+    for name_j, data_j in dict_of_photo_links_data.items():
+        item_json = {"file name": name_j, "size": data_j[1]}
+        list_json.append(item_json)
+    with open(name_json, "w") as fjson:
+        json.dump(list_json, fjson, ensure_ascii=False, indent=2)
+
+    print(f'Файл {name_json} сохранён в корневом каталоге.')
+    # pprint(dict_json)
+
+
 if __name__ == '__main__':
     # Получить путь к токенам пользователя
     path_to_token_file = r'C:\Users\ILYA\Desktop\PYTHON\_final_API\user_data.txt'
     # Файл сохранится в папку NETOLOGY
     path_disk = "NETOLOGY"
     # Параметры для API VK
-    vk_id = "551682139"
+    vk_id = "805220939"
     vk_version = "5.131"
     # Максимальное количество фото
     vk_qty_photo = "5"
+    # Имя файла json на выходе программы в корневом каталоге
+    json_name = "sample.json"
     # Получить TOKENs
     tokens = read_tokens(path_to_token_file)
     token_vk = tokens["vk"]
@@ -155,18 +171,22 @@ if __name__ == '__main__':
     vk_data = user_data_downloader.get_photos(vk_id, vk_qty_photo)
     photo_items = vk_data['response']['count']
     print(f'Найдено {photo_items} фото профиля.')
+    # pprint(vk_data)
     dict_of_photo_links = {}
     for data in vk_data['response']['items']:
         photo_profile = [data['sizes'][-1]['url'], data['likes']['count'], data['date']]
-        if str(data['likes']['count']) not in dict_of_photo_links.keys():
-            dict_of_photo_links.setdefault(str(data['likes']['count']) + ".jpg", data['sizes'][-1]['url'])
+        if (str(data['likes']['count']) + ".jpg") not in dict_of_photo_links.keys():
+            dict_of_photo_links.setdefault(str(data['likes']['count']) + ".jpg",
+                                           [data['sizes'][-1]['url'], data['sizes'][-1]['type']])
         elif (str(data['likes']['count']) + str(data['date'])) not in dict_of_photo_links.keys():
-            dict_of_photo_links.setdefault(str(data['likes']['count']) + str(data['date']) + ".jpg",
-                                           data['sizes'][-1]['url'])
+            dict_of_photo_links.setdefault(str(data['likes']['count']) + "_" + str(data['date']) + ".jpg",
+                                           [data['sizes'][-1]['url'], data['sizes'][-1]['type']])
     # pprint(dict_of_photo_links)
 
     path_prj_folder = create_photo_dir(path_disk)
 
-    for name, link in dict_of_photo_links.items():
-        file_to_upload = download_photo(path_prj_folder, name, link)
+    for name, photo_data in dict_of_photo_links.items():
+        file_to_upload = download_photo(path_prj_folder, name, photo_data)
         uploader.upload(file_to_upload, path_disk)
+    # pprint(dict_of_photo_links)
+    make_json(dict_of_photo_links, json_name)
